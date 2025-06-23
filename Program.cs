@@ -1,4 +1,5 @@
 using POC_Fawry.Filters;
+using POC_Fawry.Models;
 using POC_Fawry.Services;
 
 namespace POC_Fawry {
@@ -20,18 +21,24 @@ namespace POC_Fawry {
             //        // policy.WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS"); 
             //    });
             //});
-          
+
             // Add services to the container.
             builder.Services.AddControllersWithViews();
-            builder.Services.AddHttpClient<FawryService>();
-            // Register the HMAC filter
+         
+            // Register the Signature filter
             builder.Services.AddScoped<SignatureValidationFilter>();
-   
+        
+          
             // Register IHttpContextAccessor
+            
             builder.Services.AddHttpContextAccessor();
             builder.Services.Configure<FawryOptions>(builder.Configuration.GetSection(FawryOptions.Fawry));
+            // If using HttpClient
+            builder.Services.AddHttpClient<FawryHttpService>();
+            builder.Services.AddScoped<FawryService>(); // Main service
+            builder.Services.AddScoped<IPayment, FawryService>();
             var app = builder.Build();
-            
+
             // Use CORS middleware
             app.UseCors("AllowSpecificOrigin");
             app.Use(async (context, next) =>

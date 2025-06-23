@@ -1,16 +1,16 @@
 ﻿using POC_Fawry.Models;
+using System.Threading.Tasks;
 
 namespace POC_Fawry.Services {
     public interface IPayment {
-        Task<dynamic> CaptureTransactionAsync(ProcessRequestDto captureDto);
-        Task<string> GetClientSecretAsync(OrderRequestDto payload, bool IsAuth);
-        Task<dynamic> GetTransactionByMerchantOrderIdAsync(string MerchantOrderId);
-        Task<dynamic> GetTransactionByOrderIdAsync(int orderId);
-        Task<dynamic> GetTransactionByTrxIdAsync(int transactionID);
-        Task<string> GetWithTokenAsync(object data, string url);
-        Task<string> PostAsync(object data, string url);
-        Task<string> PostWithTokenAsync(object data, string url);
-        Task<dynamic> RefundTransactionAsync(ProcessRequestDto refundDto);
-        Task<dynamic> VoidTransactionAsync(VoidRequestDto voidDto);
+        Task<FawryCancelResponse> CancelTransactionAsync(FawryCancelRequest request);
+        Task<string> FawryCallbackAsync(FawryCallbackResponse request);
+        Task<FawryChargeResponse> FawryChargeAsync(FawryChargeRequest request);
+        Task<FawryChargeAuthResponse> FawryAuthChargeAsync(FawryChargeAuthRequest request);
+        Task<FawryCaptureResponse> FawryCaptureAsync(FawryCaptureRequest request);
+        Task<FawryRefundResponse> RefundTransactionAsync(FawryRefundRequest request);
+        Task<FawryAuthCancelResponse> CancelAuthTransactionAsync(FawryAuthCancelRequest request);
+        Task<PaymentStatusResponse> GetPaymentStatus();
+        
     }
 }

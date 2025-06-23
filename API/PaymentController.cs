@@ -11,119 +11,121 @@ namespace POC_Fawry.API {
     [ApiController]
     [Route("api/[controller]")]
     public class PaymentController : ControllerBase {
-        private readonly FawryService _fawryService;
+        private readonly IPayment _fawryService;
 
         /// <summary>
         /// Initializes a new instance of the <seecref="PaymentController"/> class.
         /// </summary>
-        /// <paramname="paymobService">The service used for interacting with Paymob's API.</param>
-        public PaymentController(FawryService paymobService)
+        /// <paramname="fawryService">The service used for interacting with Fawry's API.</param>
+        public PaymentController(IPayment fawryService)
         {
-            _fawryService = paymobService;
+            _fawryService = fawryService;
         }
 
-        /// <summary>
-        /// Retrieves the client secret key for a payment transaction.
-        /// </summary>
-        /// <paramname="order">The order details required to generate the client secret.</param>
-        /// <paramname="IsAuth">Indicates whether the transaction requires authentication.</param>
-        /// <returns>The client secret key for the payment transaction.</returns>
-        [HttpPost("payment-transaction")]
-        public async Task<IActionResult> GetClientSecret([FromBody] OrderRequestDto order, bool IsAuth)
-        {
-            var clientSecret = await _fawryService.GetClientSecretAsync(order, IsAuth);
-            return Ok(new { client_secret_key = clientSecret });
-        }
 
         /// <summary>
-        /// Handles the callback from Paymob after a payment is processed.
+        /// Handles the callback from Fawry after a payment is processed.
         /// </summary>
-        /// <paramname="response">The payment response object from Paymob.</param>
+        /// <paramname="response">The payment response object from Fawry.</param>
         /// <returns>The processed payment response.</returns>
         [HttpPost("payment-callback")]
-        [ServiceFilter(typeof(SignatureValidationFilter))] // Apply the HMAC filter
-        public IActionResult PaymentCallback([FromBody] object response)
+        [ServiceFilter(typeof(SignatureValidationFilter))] // Apply the Signature filter
+        public async Task<IActionResult> FawryCallback([FromBody] object response)
         {
-            PaymentResponseDto createdOrder = JsonConvert.DeserializeObject<PaymentResponseDto>(response.ToString());
-            return Ok(createdOrder.Obj);
+            try
+            {
+                FawryCallbackResponse createdOrder = JsonConvert.DeserializeObject<FawryCallbackResponse>(response.ToString());
+                var result = await _fawryService.FawryCallbackAsync(createdOrder);
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpPost("initpayment")]
+        public async Task<IActionResult> InitPayment([FromBody] FawryChargeRequest request)
+        {
+
+            return Ok(await _fawryService.FawryChargeAsync(request));
+
         }
 
         /// <summary>
-        /// Captures a previously authorized payment transaction.
+        /// This API can be used to authorize client payment using his card information. This authorization request shall place a hold on the client's card with the charged amount until you capture the payment later.
         /// </summary>
-        /// <paramname="captureDto">The details required to capture the transaction.</param>
-        /// <returns>The response from the capture transaction request.</returns>
-        [HttpPost("capture-transaction")]
-        public async Task<IActionResult> CaptureTransaction([FromBody] ProcessRequestDto captureDto)
+        /// <param name="request"></param>
+        /// <returns></returns>
+        [HttpPost("authorizepayment")]
+        public async Task<IActionResult> AuthorizePayment([FromBody] FawryChargeAuthRequest request)
         {
-            var data = await _fawryService.CaptureTransactionAsync(captureDto);
-            TransactionResponseDto response = JsonConvert.DeserializeObject<TransactionResponseDto>(data.ToString());
-            return Ok(response);
+
+            var data = await _fawryService.FawryAuthChargeAsync(request);
+            return Ok(data);
         }
 
         /// <summary>
-        /// Cancels a previously authorized payment transaction.
+        /// This API can be used to capture a payment for which you have created a payment authorization. To capture an authorized payment, include the authorization ID (merchantRefNum) you received with your payment authorization request
         /// </summary>
-        /// <paramname="voidDto">The details required to void the transaction.</param>
-        /// <returns>The response from the void transaction request.</returns>
-        [HttpPost("cancel-transaction")]
-        public async Task<IActionResult> CancelOrder([FromBody] VoidRequestDto voidDto)
+        /// <param name="request"></param>
+        /// <returns></returns>
+        [HttpPost("capturepayment")]
+        public async Task<IActionResult> CapturePayment([FromBody] FawryCaptureRequest request)
         {
-            var data = await _fawryService.VoidTransactionAsync(voidDto);
-            TransactionResponseDto response = JsonConvert.DeserializeObject<TransactionResponseDto>(data.ToString());
-            return Ok(response);
+            var data = await _fawryService.FawryCaptureAsync(request);
+            return Ok(data);
         }
 
         /// <summary>
-        /// Refunds a previously captured payment transaction.
+        /// This API can be used to cancel a payment authorization. To cancel an authorized payment, include the authorization ID (merchantRefNum) you received with your payment authorization request.
         /// </summary>
-        /// <paramname="refundDto">The details required to process the refund.</param>
-        /// <returns>The response from the refund transaction request.</returns>
-        [HttpPost("refund-transaction")]
-        public async Task<IActionResult> RefundOrder([FromBody] ProcessRequestDto refundDto)
+        /// <param name="request"></param>
+        /// <returns></returns>
+        [HttpPost("cancelauthorder")]
+        public async Task<IActionResult> CancelAuthOrder([FromBody] FawryAuthCancelRequest request)
         {
-            var data = await _fawryService.RefundTransactionAsync(refundDto);
-            TransactionResponseDto response = JsonConvert.DeserializeObject<TransactionResponseDto>(data.ToString());
-            return Ok(response);
+
+            return Ok(await _fawryService.CancelAuthTransactionAsync(request));
+
         }
 
         /// <summary>
-        /// Retrieves a transaction by its unique transaction ID.
+        /// Depending on the status of your payment, FawryPay allows you to cancel payment that has been submitted by your customer. As long as the status of your payment is still unpaid, you can easily cancel the payment this API. A notification will be sent to customer via his/her mobile number if it exists with the payment information. Meanwhile, if the payment is already paid, you will need to use our Refund API to refund your customer.
         /// </summary>
-        /// <paramname="TransactionId">The unique identifier of the transaction.</param>
-        /// <returns>The transaction details.</returns>
-        [HttpGet("transaction-by-trxId")]
-        public async Task<IActionResult> GetTransactionById(int TransactionId)
+        /// <param name="request"></param>
+        /// <returns></returns>
+        [HttpPost("cancelorder")]
+        public async Task<IActionResult> CancelOrder([FromBody] FawryCancelRequest request)
         {
-            var data = await _fawryService.GetTransactionByTrxIdAsync(TransactionId);
-            TransactionResponseDto response = JsonConvert.DeserializeObject<TransactionResponseDto>(data.ToString());
-            return Ok(response);
+            return Ok(await _fawryService.CancelTransactionAsync(request));
+
         }
 
         /// <summary>
-        /// Retrieves a transaction by its associated order ID.
+        /// FawryPay allows you to refund amounts that have previously been paid by customers, returning a unique reference for this request. Refunding can be done on the full captured amount or a partial amount. Payments which have been authorised, but not captured, cannot be refunded.
         /// </summary>
-        /// <paramname="orderId">The unique identifier of the order associated with the transaction.</param>
-        /// <returns>The transaction details.</returns>
-        [HttpGet("transaction-by-orderId")]
-        public async Task<IActionResult> TransactionByOrderId(int orderId)
+        /// <param name="request"></param>
+        /// <returns></returns>
+        [HttpPost("refundorder")]
+        public async Task<IActionResult> RefundOrder([FromBody] FawryRefundRequest request)
         {
-            var data = await _fawryService.GetTransactionByOrderIdAsync(orderId);
-            TransactionResponseDto response = JsonConvert.DeserializeObject<TransactionResponseDto>(data.ToString());
-            return Ok(response);
+            return Ok(await _fawryService.RefundTransactionAsync(request));
+
         }
 
         /// <summary>
-        /// Retrieves a transaction by its associated merchant order ID.
+        /// FawryPay delivers the Get Payment Status API as a responsive API for merchants who wishes to pull the status of their transactions whenever needed. Our valued merchants can use Get Payment Status API to retrieve the payment status for the charge request, usingGET method.
         /// </summary>
-        /// <paramname="MerchantOrderId">The unique identifier of the merchant order associated with the transaction.</param>
-        /// <returns>The transaction details.</returns>
-        [HttpGet("transaction-by-MerchantOrderId")]
-        public async Task<IActionResult> TransactionByMerchantOrderId(string MerchantOrderId)
+        /// <param name="merchantCode"></param>
+        /// <param name="merchantRefNumber"></param>
+        /// <returns></returns>
+        [HttpGet("GetPaymentStatus")]
+        public async Task<IActionResult> GetPaymentStatus()
         {
-            var data = await _fawryService.GetTransactionByMerchantOrderIdAsync(MerchantOrderId);
-            TransactionResponseDto response = JsonConvert.DeserializeObject<TransactionResponseDto>(data.ToString());
-            return Ok(response);
+            var data = await _fawryService.GetPaymentStatus();
+
+            return Ok(data);
         }
     }
 }
